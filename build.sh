@@ -464,7 +464,7 @@ function dpdk_download_patch_build {
 
 function jpegxs_download_build {
     if ! (mkdir -p "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}/jpegxs" &&
-          curl -Lf https://github.com/OpenVisualCloud/SVT-JPEG-XS/archive/refs/tags/v${JPEG_XS_VER}.tar.gz | \
+          curl -Lf https://github.com/OpenVisualCloud/SVT-JPEG-XS/archive/${JPEG_XS_COMMIT_ID}.tar.gz | \
           tar -zx --strip-components=1 -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}/jpegxs") >>$log_file 2>&1; then
         echo
         echo -e ${RED}[ERROR] JPEG download failed ${NC}
@@ -608,7 +608,8 @@ function ffmpeg_download_patch_build {
           cp "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/Media-Transport-Library/ecosystem/ffmpeg_plugin/mtl_*.c -rf "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg/libavdevice/ &&
           cp "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/Media-Transport-Library/ecosystem/ffmpeg_plugin/mtl_*.h -rf "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg/libavdevice/ &&
           git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/Media-Transport-Library/ecosystem/ffmpeg_plugin/7.0/*.patch &&
-          git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply --whitespace=fix "${SCRIPT_DIR}/patches"/jpegxs/*.patch &&
+          cp "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/jpegxs/ffmpeg-plugin/libsvtjpegxs* "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg/libavcodec/ &&
+          git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply --whitespace=fix "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/jpegxs/ffmpeg-plugin/7.0/*.patch &&
           git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply "${SCRIPT_DIR}/patches"/ffmpeg/0001-hwupload_async.diff &&
           git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply "${SCRIPT_DIR}/patches"/ffmpeg/0002-qsv_aligned_malloc.diff &&
           git -C "${LOCAL_INSTALL_DEPENDENCIES_DIRECTORY}"/ffmpeg apply "${SCRIPT_DIR}/patches"/ffmpeg/0003-qsvvpp_async.diff &&
@@ -827,7 +828,6 @@ function install_in_docker_enviroment {
     IMAGE_TAG="${IMAGE_TAG:-latest}"
     cat "${VERSIONS_ENVIRONMENT_FILE:-${SCRIPT_DIR}/versions.env}" > "${SCRIPT_DIR}/.temp.env"
 
-    # "${VERSIONS_ENVIRONMENT_FILE}"
     docker buildx build "${ENV_PROXY_ARGS[@]}" \
         --build-arg VERSIONS_ENVIRONMENT_FILE=".temp.env" \
         --build-arg IMAGE_CACHE_REGISTRY="${IMAGE_CACHE_REGISTRY}" \
@@ -843,6 +843,14 @@ function install_in_docker_enviroment {
         -f "${SCRIPT_DIR}/Dockerfile" \
         --target manager-stage \
         "${SCRIPT_DIR}"
+
+    cp -r "${SCRIPT_DIR}/gRPC" "${SCRIPT_DIR}/nmos"
+
+    docker buildx build \
+        -t "${IMAGE_REGISTRY}/tiber-broadcast-suite-nmos-node:${IMAGE_TAG}" \
+        -f "${SCRIPT_DIR}/nmos/Dockerfile" \
+        --target final-stage \
+        "${SCRIPT_DIR}/nmos"
 
     docker tag "${IMAGE_REGISTRY}/tiber-broadcast-suite:${IMAGE_TAG}" video_production_image:latest
     docker tag "${IMAGE_REGISTRY}/mtl-manager:${IMAGE_TAG}" mtl-manager:latest
